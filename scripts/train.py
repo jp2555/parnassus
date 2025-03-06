@@ -26,15 +26,15 @@ logger = logging.getLogger(__name__)
 
 def get_model_name(flags):
     if flags.corrector:
-        model_name = f'parnassus_qcd_{flags.K}_{flags.num_local}_{flags.num_layers}_{flags.projection}_corrector.weights.h5'
+        model_name = f'h1_qcd_{flags.K}_{flags.num_local}_{flags.num_layers}_{flags.projection}_corrector.weights.h5'
     else:
-        model_name = f'parnassus_qcd_{flags.K}_{flags.num_local}_{flags.num_layers}_{flags.projection}.weights.h5'
+        model_name = f'h1_qcd_{flags.K}_{flags.num_local}_{flags.num_layers}_{flags.projection}.weights.h5'
     return model_name
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Train the PET model.")
-    parser.add_argument("--dataset", type=str, default="parnassus", help="Dataset to use")
-    parser.add_argument("--folder", type=str, default="/mscratch/sd/v/vmikuni/parnassus/", help="Folder containing input files")
+    parser.add_argument("--dataset", type=str, default="h1", help="Dataset to use")
+    parser.add_argument("--folder", type=str, default="/global/cfs/cdirs/m3246/H1/h5/", help="Folder containing input files")
     parser.add_argument("--batch", type=int, default=64, help="Batch size")
     parser.add_argument("--epoch", type=int, default=300, help="Max epoch")
     parser.add_argument("--lr", type=float, default=3e-5, help="Learning rate")
@@ -74,29 +74,29 @@ def main():
 
     if flags.corrector:
         train_loader = utils.DataLoader(os.path.join(flags.folder),
-                                        reference = 'ggF.h5', correction = 'parnassus_ggF.h5',
+                                        reference = 'Djangoh_Eplus0607.h5', correction = 'h1_Djangoh_Eplus0607.h5',
                                         batch_size = flags.batch,
                                         rank = hvd.rank(), size = hvd.size(),
                                         corrector = True)
         val_loader = utils.DataLoader(os.path.join(flags.folder),
-                                      reference = 'ggF.h5', correction = 'parnassus_ggF.h5',
+                                      reference = 'Djangoh_Eplus0607.h5', correction = 'h1_Djangoh_Eplus0607.h5',
                                       batch_size = flags.batch,
                                       rank = hvd.rank(), size = hvd.size(),
                                       corrector = True)
 
     else:
         train_loader = utils.DataLoader(os.path.join(flags.folder,'h5'),
-                                        names = ['top','qcd_400','qcd_600'],
+                                        names = ['Rapgap_Eplus0607.h5'],
                                         batch_size = flags.batch,
                                         rank = hvd.rank(), size = hvd.size())
         val_loader = utils.DataLoader(os.path.join(flags.folder,'h5'),
-                                      names = ['ggF'],
+                                      names = ['Djangoh_Eplus0607.h5'],
                                       batch_size = flags.batch,
                                       rank = hvd.rank(), size = hvd.size())
 
         
     if flags.fine_tune:
-        model_name = 'parnassus_v2_qcd_pretrain'
+        model_name = 'h1_v2_qcd_pretrain'
         model_name = os.path.join(flags.folder,'checkpoints',model_name)
     else:
         model_name = None

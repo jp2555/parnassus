@@ -21,13 +21,13 @@ logger = logging.getLogger(__name__)
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Process elec data.")
     parser.add_argument("--dataset", type=str, default="parnassus", help="Dataset to use")
-    parser.add_argument("--folder", default="/mscratch/sd/v/vmikuni/parnassus/", help="Folder containing input files")
+    parser.add_argument("--folder", default="/global/cfs/cdirs/m3246/vmikuni/parnassus/", help="Folder containing input files")
     parser.add_argument("--batch", type=int, default=128, help="Batch size")
     parser.add_argument("--fine_tune", action='store_true', help="Fine tune a model")
     parser.add_argument("--nevts", type=int, default=-1, help="Number of events to load")
     parser.add_argument("--sample", action='store_true', help="Sample from trained model")
     parser.add_argument("--plot_folder", default="../plots", help="Folder to save the outputs")
-    parser.add_argument("--val_file", default="val_ggF", help="Folder to save the outputs")
+    parser.add_argument("--val_file", default="val_h1", help="Folder to save the outputs")
     parser.add_argument("--corrector", action='store_true', default=False, help='Learn a linear correction to generated events')
 
     parser.add_argument("--name", default="parnassus", help="File to save the outputs")
@@ -112,10 +112,10 @@ def sample_data(test, model,corrector, flags, sample_name):
     genevt = hvd.allgather(tf.constant(gen_evt)).numpy()
     if hvd.rank() == 0:
         with h5.File(sample_name, "w") as h5f:
-            h5f.create_dataset("reco", data=reco)
-            h5f.create_dataset("reco_evt", data=reco_evt)
-            h5f.create_dataset("gen", data=gen)
-            h5f.create_dataset("gen_evt", data=genevt)
+            h5f.create_dataset("reco_particle_features", data=reco)
+            h5f.create_dataset("reco_event_features", data=reco_evt)
+            h5f.create_dataset("gen_particle_features", data=gen)
+            h5f.create_dataset("gen_event_features", data=genevt)
             h5f.create_dataset("eventNumber", data=event_number)
                         
 def get_generated_data(sample_name,nevts=-1):
@@ -123,8 +123,8 @@ def get_generated_data(sample_name,nevts=-1):
     with h5.File(sample_name,"r") as h5f:
         if nevts>0:
             nevts = None
-        reco_evt = h5f['reco_evt'][:nevts]
-        reco_particles = h5f['reco'][:nevts]
+        reco_evt = h5f['reco_event_features'][:nevts]
+        reco_particles = h5f['reco_particle_features'][:nevts]
 
         
     def undo_pt(x,y):
