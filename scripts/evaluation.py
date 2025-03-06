@@ -83,16 +83,16 @@ def load_file_h5(filename, truth_data=None,n_events=None):
         return x*mask[:,:,None]
 
     if truth_data is None:
-        truth_data = h5.File(filename,"r")['gen'][:n_events]
-        truth_ht = h5.File(filename,"r")['gen_evt'][:n_events,3]
+        truth_data = h5.File(filename,"r")['gen_particle_features'][:n_events]
+        truth_ht = h5.File(filename,"r")['gen_event_features'][:n_events,3]
         #undo log transform for pt
         truth_data = undo_pt(truth_data,truth_ht)
         truth_data = make_dict(truth_data)
         print(truth_data['class'])
         
                 
-    pflow_data = h5.File(filename,"r")['reco'][:n_events]
-    pflow_ht = h5.File(filename,"r")['reco_evt'][:n_events,3]
+    pflow_data = h5.File(filename,"r")['reco_particle_features'][:n_events]
+    pflow_ht = h5.File(filename,"r")['reco_event_features'][:n_events,3]
     event_number = h5.File(filename,"r")['eventNumber'][:n_events]
     pflow_data = undo_pt(pflow_data,pflow_ht)
     pflow_data = make_dict(pflow_data)
