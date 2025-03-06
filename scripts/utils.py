@@ -48,17 +48,17 @@ class DataLoader:
         if self.corrector:
             assert len(self.correction) > 0 and len(self.reference) > 0, "ERROR: Reference and Correction not given"
         
-        self.mean_part = [0.0 , 0.0, -0.761949, -3.663438,
+        self.mean_part = np.array([0.0 , 0.0, -0.761949, -3.663438,
                           -2.8690917,0.03239748, 
-                          3.9436243, 0.0]
-        self.std_part =  [1.0, 1.0, 1.0133458, 1.03931,
+                          3.9436243, 0.0])
+        self.std_part =  np.array([1.0, 1.0, 1.0133458, 1.03931,
                           1.0040112, 0.98908925, 
-                          1.2256976, 1.0] 
+                          1.2256976, 1.0])
 
-        self.mean_event =  [ 6.4188385 ,  0.3331013 ,  0.8914633 , 
-                            -0.8352072,  -0.07296985]
-        self.std_event  = [0.97656405, 0.1895471 , 0.14934653, 
-                           0.4191545 , 1.734126]
+        self.mean_event =  np.array([ 6.4188385 ,  0.3331013 ,  0.8914633 , 
+                            -0.8352072,  -0.07296985])
+        self.std_event  = np.array([0.97656405, 0.1895471 , 0.14934653, 
+                           0.4191545 , 1.734126])
 
         self.part_names = ['$\eta$', '$\phi$', 'log($1 + p_{Trel}$)',
                            'vx', 'vy', 'vz',
