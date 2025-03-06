@@ -36,7 +36,8 @@ from jet_helper import Jet, get_cluster_sequence
 #     "pfcs": "PFCand_",
 # }
 
-varlist = ["pt", "eta", "phi", "vx", "vy", "vz", "class"]
+# varlist = ["pt", "eta", "phi", "vx", "vy", "vz", "class"]
+varlist = ['Q2','y','e_px','e_py','e_pz','wgt']
 
 
 parser = argparse.ArgumentParser(description="Preprocess full event files")
@@ -57,7 +58,7 @@ parser.add_argument("-dr", type=float, help="Delta R for jet clustering", defaul
 parser.add_argument("-no_clustering", action="store_true", help="Skip jet clustering")
 parser.add_argument("-dl", action="store_true", help="Treat as delphes file")
 
-def make_dict(data):
+def make_dict(data): # need to change later
     data_dict = {}
     data_dict[f'pt'] = data[:,:,2]
     data_dict[f'eta'] = data[:,:,0]

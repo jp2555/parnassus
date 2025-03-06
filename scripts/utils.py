@@ -106,7 +106,7 @@ class DataLoader:
         self.gen =  np.concatenate([h5.File(f, 'r')['gen_particle_features'][:] for f in self.files], axis=0)[:nevts]
         self.gen_evt = np.concatenate([h5.File(f, 'r')['gen_event_features'][:] for f in self.files], axis=0)[:nevts]
         evtn = np.concatenate([h5.File(f, 'r')['eventNumber'][:] for f in self.files], axis=0)[:nevts]
-        self.gen_mask = self.gen[:, :, 2] != 0  
+        self.gen_mask = self.gen[:, :, 2] != 0  # phi not zero
             
         gen = self.preprocess(self.gen,self.gen_mask).astype(np.float32)
         gen_evt = self.preprocess_evt(self.gen_evt).astype(np.float32)
