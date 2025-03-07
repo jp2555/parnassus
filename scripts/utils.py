@@ -119,7 +119,7 @@ class DataLoader:
         gen_data_chunk = np.concatenate([h5.File(f, 'r')['gen_particle_features'][:] for f in files], axis=0)[:nevts]
         gen_mask_chunk = gen_data_chunk[:, :, 2] != 0
         gen_evt_chunk = np.concatenate([h5.File(f, 'r')['gen_event_features'][:] for f in files], axis=0)[:nevts]
-        reco_evt_chunk = np.concatenate([h5.File(f, 'r')['reco_event_features'][:,:,0:5] for f in files], axis=0)[:nevts]
+        reco_evt_chunk = np.concatenate([h5.File(f, 'r')['reco_event_features'][:,0:5] for f in files], axis=0)[:nevts]
 
         if preprocess:
             reco_data_chunk = self.preprocess(reco_data_chunk, reco_mask_chunk)
