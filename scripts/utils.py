@@ -56,9 +56,9 @@ class DataLoader:
                         #   1.2256976, 1.0])
 
         self.mean_evt =  np.array([ 6.4188385 ,  0.3331013 ,  0.8914633 , 
-                            -0.8352072,  -0.07296985])
+                            -0.8352072,  -0.07296985, 1])
         self.std_evt  = np.array([0.97656405, 0.1895471 , 0.14934653, 
-                           0.4191545 , 1.734126])
+                           0.4191545 , 1.734126, 1])
 
         self.part_names = ['$\eta$', '$\phi$', 'log($1 + p_{Trel}$)',
                            'vx', 'vy', 'vz',
@@ -92,7 +92,7 @@ class DataLoader:
         #print(file_list)
         self.num_part = h5.File(file_list[0],'r')['reco_particle_features'].shape[1]
         self.num_feat = h5.File(file_list[0],'r')['reco_particle_features'].shape[2]
-        self.num_evt = h5.File(file_list[0],'r')['reco_event_features'].shape[1]
+        self.num_evt = h5.File(file_list[0],'r')['reco_event_features'].shape[1]  
         self.steps_per_epoch = self.nevts//self.size//self.batch_size
 
         if self.rank ==0:
@@ -119,7 +119,7 @@ class DataLoader:
         gen_data_chunk = np.concatenate([h5.File(f, 'r')['gen_particle_features'][:] for f in files], axis=0)[:nevts]
         gen_mask_chunk = gen_data_chunk[:, :, 2] != 0
         gen_evt_chunk = np.concatenate([h5.File(f, 'r')['gen_event_features'][:] for f in files], axis=0)[:nevts]
-        reco_evt_chunk = np.concatenate([h5.File(f, 'r')['reco_event_features'][:] for f in files], axis=0)[:nevts]
+        reco_evt_chunk = np.concatenate([h5.File(f, 'r')['reco_event_features'][:,:,0:5] for f in files], axis=0)[:nevts]
 
         if preprocess:
             reco_data_chunk = self.preprocess(reco_data_chunk, reco_mask_chunk)
@@ -151,15 +151,15 @@ class DataLoader:
         num_feat = self.mean_part.shape[-1]        
         new_part = mask[:,:, None]*(x[:,:,:num_feat]*self.std_part + self.mean_part)
         #charge
-        new_part[:,:,6] = np.sign(new_part[:,:,6])
+        new_part[:,:,3] = np.sign(new_part[:,:,3])
         #pids
-        max_indices = np.argmax(new_part[:,:,7:], axis=-1)
-        pids = np.zeros_like(new_part[:,:,7:])
-        pids[np.arange(new_part.shape[0])[:, None], np.arange(new_part.shape[1]), max_indices] = 1
-        new_part[:,:,7:] = pids
-        #zero vertex and pids for neutral particles
-        neutral_mask = (pids[:,:,2]==1) | (pids[:,:,3]==1)
-        new_part[:,:,3:7] *= (1.0-neutral_mask[:,:,None])
+        # max_indices = np.argmax(new_part[:,:,7:], axis=-1)
+        # pids = np.zeros_like(new_part[:,:,7:])
+        # pids[np.arange(new_part.shape[0])[:, None], np.arange(new_part.shape[1]), max_indices] = 1
+        # new_part[:,:,7:] = pids
+        # #zero vertex and pids for neutral particles
+        # neutral_mask = (pids[:,:,2]==1) | (pids[:,:,3]==1)
+        # new_part[:,:,3:7] *= (1.0-neutral_mask[:,:,None])
                 
         return  new_part
 
