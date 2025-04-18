@@ -190,7 +190,13 @@ def process_files(file_list, base_path, output_file,
             if total_nevts is not None:
                 num_events = min(num_events, total_nevts)
 
-            print(f"Processing file: {f} with {num_events} events")
+            if num_events != 428:
+                print(f"SKIPPING {f} with {num_events} events")
+                continue  # FIXME: Stopgap for weird root files
+            else:
+                print(f"Processing file: {f} with {num_events} events")
+
+
             # Process the file in chunks
             for start in range(0, num_events, chunk_size):
                 end = min(start + chunk_size, num_events)
@@ -219,8 +225,7 @@ if __name__ == "__main__":
                         default='/global/cfs/cdirs/m3246/eic/NC_DIS_18x275/minQ2=100',
                         help='Folder containing ROOT files (data and MC)')
     parser.add_argument('--data-output',
-                        default='./',
-                        # default='/global/cfs/cdirs/m3246/eic/NC_DIS_18x275/h5_files',
+                        default='/global/cfs/cdirs/m3246/eic/NC_DIS_18x275/h5_files',
                         help='Output folder for the HDF5 file')
     parser.add_argument('--sample',
                         default='NC_DIS_Q2_100',
