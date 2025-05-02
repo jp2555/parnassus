@@ -11,11 +11,19 @@ np.object = object
 import uproot3 as uproot
 import h5py
 
+def get_eta_phi(px, py, pz):
+
+    p_mag = np.sqrt(px*px + py*py + pz*pz)
+    theta = np.arccos(pz / p_mag)
+    eta = -np.log(np.tan(theta/2))
+
+    phi = np.arctan2(py, px)
+    return eta, phi
+
 # Define global lists for keys and features
 kinematics_list = ['x', 'Q2', 'W', 'y', 'nu']
 
 reco_particle_list = [
-    'ReconstructedParticles.type',
     'ReconstructedParticles.energy',  # energy used for sorting (index 1)
     'ReconstructedParticles.momentum.x',
     'ReconstructedParticles.momentum.y',
@@ -25,22 +33,23 @@ reco_particle_list = [
     'ReconstructedParticles.referencePoint.z',
     'ReconstructedParticles.charge',
     'ReconstructedParticles.mass',
-    'ReconstructedParticles.PDG'
+    'ReconstructedParticles.PDG',
+    'ReconstructedParticles.type',
 ]
 
 gen_particle_list = [
-    'MCParticles.PDG',
-    'MCParticles.generatorStatus',  # generatorStatus used for sorting (index 1)
-    'MCParticles.simulatorStatus',
-    'MCParticles.charge',
-    'MCParticles.time',
-    'MCParticles.mass',
+    'MCParticles.generatorStatus',  # generatorStatus (final state particle = 1) used for sorting (index 0). Changed  to E later
+    'MCParticles.momentum.x',
+    'MCParticles.momentum.y',
+    'MCParticles.momentum.z',
     'MCParticles.vertex.x',
     'MCParticles.vertex.y',
     'MCParticles.vertex.z',
-    'MCParticles.momentum.x',
-    'MCParticles.momentum.y',
-    'MCParticles.momentum.z'
+    'MCParticles.charge',
+    'MCParticles.mass',
+    'MCParticles.PDG',
+    'MCParticles.time',
+    # 'MCParticles.simulatorStatus',
 ]
 
 
@@ -123,10 +132,19 @@ def process_chunk(tmp_file, start, end, max_part, max_nonzero):
     ]
     # Stack so that shape is (n_events_chunk, max_part, num_features)
     reco_pf = np.stack(parts, axis=-1)
-    # Sort the particles by energy (Energy stored at index 1)
-    order = np.argsort(-reco_pf[:, :, 1], axis=1)
+    # Sort the particles by energy (Energy stored at index 0)
+    order = np.argsort(-reco_pf[:, :, 0], axis=1)
     reco_pf = np.take_along_axis(reco_pf, order[:, :, None], axis=1)
     reco_pf = reco_pf[:, :max_nonzero, :]
+
+    #Add Reco eta and phi
+    reco_eta, reco_phi = get_eta_phi(reco_pf[:,:,1],reco_pf[:,:,2],reco_pf[:,:,3])
+    reco_pf = np.concatenate([
+        reco_pf,
+        reco_eta[:, :, None],
+        reco_phi[:, :, None]
+    ], axis=-1)
+
     reco_dict['particle_features'].append(reco_pf)
 
     # Concatenate lists in reco_dict (only one element per key here)
@@ -153,10 +171,20 @@ def process_chunk(tmp_file, start, end, max_part, max_nonzero):
     ]
     # Stack so that shape is (n_events_chunk, max_part, num_features)
     gen_pf = np.stack(gen_parts, axis=-1)
-    # Sort the particles using generatorStatus (stored at index 1)
-    order_gen = np.argsort(-gen_pf[:, :, 1], axis=1)
+    # Sort the particles using generatorStatus (stored at index 0)
+    order_gen = np.argsort(-gen_pf[:, :, 0], axis=1)
     gen_pf = np.take_along_axis(gen_pf, order_gen[:, :, None], axis=1)
     gen_pf = gen_pf[:, :max_nonzero, :]
+    #calc E
+    gen_pf[:,:,0] = np.sqrt(gen_pf[:,:,1]**2 + gen_pf[:,:,2]**2 + gen_pf[:,:,3]**2 + gen_pf[:,:,8]**2)
+
+    gen_eta, gen_phi = get_eta_phi(gen_pf[:,:,1],gen_pf[:,:,2],gen_pf[:,:,3])
+    gen_pf = np.concatenate([
+        gen_pf,
+        gen_eta[:, :, None],
+        gen_phi[:, :, None]
+    ], axis=-1)
+
     gen_dict['particle_features'].append(gen_pf)
 
     # Concatenate lists in gen_dict
