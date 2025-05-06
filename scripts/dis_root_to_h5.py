@@ -97,14 +97,14 @@ def process_chunk(tmp_file, start, end, max_part, max_nonzero):
     Returns two dictionaries (one for reco, one for gen) where each key holds an array
     for that set of events.
     """
-    # Initialize dictionaries to accumulate arrays for the current chunk
-    reco_dict = {
+
+    reco_dict = {  #https://arxiv.org/pdf/2110.05505
         'particle_features': [],
-        'InclusiveKinematicsDA': [],
-        'InclusiveKinematicsElectron': [],
         'InclusiveKinematicsESigma': [],
-        'InclusiveKinematicsJB': [],
-        'InclusiveKinematicsSigma': []
+        # 'InclusiveKinematicsDA': [],
+        # 'InclusiveKinematicsElectron': [],
+        # 'InclusiveKinematicsJB': [],
+        # 'InclusiveKinematicsSigma': []
     }
     gen_dict = {
         'particle_features': [],
