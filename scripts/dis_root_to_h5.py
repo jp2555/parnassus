@@ -101,6 +101,7 @@ def process_chunk(tmp_file, start, end, max_part, max_nonzero):
     reco_dict = {  #https://arxiv.org/pdf/2110.05505
         'particle_features': [],
         'InclusiveKinematicsESigma': [],
+        'LeadingElectron': [],
         # 'InclusiveKinematicsDA': [],
         # 'InclusiveKinematicsElectron': [],
         # 'InclusiveKinematicsJB': [],
@@ -108,13 +109,14 @@ def process_chunk(tmp_file, start, end, max_part, max_nonzero):
     }
     gen_dict = {
         'particle_features': [],
-        'InclusiveKinematicsTruth': []
+        'InclusiveKinematicsTruth': [],
+        'LeadingElectron': []
     }
 
     # --- Process Reconstructed (reco) Quantities ---
     # Loop over each kinematic quantity dataset (e.g. InclusiveKinematicsDA, etc.)
     for key in reco_dict.keys():
-        if key != 'particle_features':
+        if 'InclusiveKinematics' in key:
             # For each inclusive kinematics group, load each feature in the kinematics list.
             # .pad(1).fillna(0).regular() ensures the data are valid for saving.
             arrays = [
@@ -147,6 +149,23 @@ def process_chunk(tmp_file, start, end, max_part, max_nonzero):
 
     reco_dict['particle_features'].append(reco_pf)
 
+    # --- extract the leading electron (PDG == 11) per event ---
+    pdg    = reco_pf[:, :, 9]
+    energy = reco_pf[:, :, 0].copy()
+    energy[pdg != 11] = -np.inf  # non-electrons become -∞
+    has_elec = (pdg == 11).any(axis=1)
+
+    # prepare output: default to -999 everywhere
+    n_events, n_features = reco_pf.shape[0], reco_pf.shape[2]
+    reco_lead = np.full((n_events, n_features), -999.0)
+
+    # for events with electrons, find the index of the max-energy one…
+    idx_all = np.argmax(energy, axis=1)     # gives something for every event
+    valid   = np.where(has_elec)[0]         # only these actually have electrons
+    reco_lead[valid] = reco_pf[valid, idx_all[valid]]
+    reco_dict['LeadingElectron'].append(reco_lead)
+
+
     # Concatenate lists in reco_dict (only one element per key here)
     for key in reco_dict:
         reco_dict[key] = np.concatenate(reco_dict[key], axis=0)
@@ -155,7 +174,7 @@ def process_chunk(tmp_file, start, end, max_part, max_nonzero):
     # Process inclusive kinematics for truth
     arrays = [
         tmp_file[f'InclusiveKinematicsTruth.{feat}'].array()[start:end]
-            .regular().squeeze()
+        .regular().squeeze()
         for feat in kinematics_list
     ]
     gen_kin = np.stack(arrays, axis=-1)
@@ -166,13 +185,12 @@ def process_chunk(tmp_file, start, end, max_part, max_nonzero):
     genStatus = tmp_file['MCParticles.generatorStatus'].array()[start:end]
     gen_parts = [
         tmp_file[feat].array()[start:end][genStatus == 1]
-            .pad(max_part).fillna(0).regular()
+        .pad(max_part).fillna(0).regular()
         for feat in gen_particle_list
     ]
     # Stack so that shape is (n_events_chunk, max_part, num_features)
     gen_pf = np.stack(gen_parts, axis=-1)
-    # Sort the particles using generatorStatus (stored at index 0)
-    order_gen = np.argsort(-gen_pf[:, :, 0], axis=1)
+    order_gen = np.argsort(-gen_pf[:, :, 0], axis=1)  #sort by energy
     gen_pf = np.take_along_axis(gen_pf, order_gen[:, :, None], axis=1)
     gen_pf = gen_pf[:, :max_nonzero, :]
     #calc E
@@ -186,6 +204,22 @@ def process_chunk(tmp_file, start, end, max_part, max_nonzero):
     ], axis=-1)
 
     gen_dict['particle_features'].append(gen_pf)
+
+    # --- extract the leading truth-electron (PDG == 11) per event ---
+    pdg_gen    = gen_pf[:, :, 9]
+    energy_gen = gen_pf[:, :, 0].copy()
+    energy_gen[pdg_gen != 11] = -np.inf
+
+    has_elec_gen = (pdg_gen == 11).any(axis=1)
+    n_events, n_features = gen_pf.shape[0], gen_pf.shape[2]
+    gen_lead = np.full((n_events, n_features), -999.0)
+
+    idxg_all = np.argmax(energy_gen, axis=1)
+    valid_g  = np.where(has_elec_gen)[0]
+    gen_lead[valid_g] = gen_pf[valid_g, idxg_all[valid_g]]
+
+    gen_dict['LeadingElectron'].append(gen_lead)
+
 
     # Concatenate lists in gen_dict
     for key in gen_dict:
