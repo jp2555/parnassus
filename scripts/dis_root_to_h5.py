@@ -51,7 +51,7 @@ gen_particle_list = [
     'MCParticles.time',
     # 'MCParticles.simulatorStatus',
 ]
-
+    # ETA and PHI are appended to the particle features
 
 def find_files_with_string(directory, pattern):
     """Find all filenames in a directory matching the pattern."""
@@ -101,7 +101,7 @@ def process_chunk(tmp_file, start, end, max_part, max_nonzero):
     reco_dict = {  #https://arxiv.org/pdf/2110.05505
         'particle_features': [],
         'InclusiveKinematicsESigma': [],
-        'LeadingElectron': [],
+        # 'LeadingElectron': [],
         # 'InclusiveKinematicsDA': [],
         # 'InclusiveKinematicsElectron': [],
         # 'InclusiveKinematicsJB': [],
@@ -110,20 +110,18 @@ def process_chunk(tmp_file, start, end, max_part, max_nonzero):
     gen_dict = {
         'particle_features': [],
         'InclusiveKinematicsTruth': [],
-        'LeadingElectron': []
+        # 'LeadingElectron': []
     }
 
     # --- Process Reconstructed (reco) Quantities ---
-    # Loop over each kinematic quantity dataset (e.g. InclusiveKinematicsDA, etc.)
+    # For each inclusive kinematics group, load each feature in the kinematics list.
     for key in reco_dict.keys():
         if 'InclusiveKinematics' in key:
-            # For each inclusive kinematics group, load each feature in the kinematics list.
-            # .pad(1).fillna(0).regular() ensures the data are valid for saving.
             arrays = [
                 tmp_file[f"{key}.{feat}"].array()[start:end]
                     .pad(1).fillna(0).regular().squeeze()
                 for feat in kinematics_list
-            ]
+            ]  # .pad(1).fillna(0).regular() ensures the data are valid for saving.
             arr = np.stack(arrays, axis=-1)  # Shape: (n_events_chunk, 5)
             reco_dict[key].append(arr)
 
@@ -134,8 +132,7 @@ def process_chunk(tmp_file, start, end, max_part, max_nonzero):
     ]
     # Stack so that shape is (n_events_chunk, max_part, num_features)
     reco_pf = np.stack(parts, axis=-1)
-    # Sort the particles by energy (Energy stored at index 0)
-    order = np.argsort(-reco_pf[:, :, 0], axis=1)
+    order = np.argsort(-reco_pf[:, :, 0], axis=1)  #sort by energy
     reco_pf = np.take_along_axis(reco_pf, order[:, :, None], axis=1)
     reco_pf = reco_pf[:, :max_nonzero, :]
 
@@ -147,28 +144,27 @@ def process_chunk(tmp_file, start, end, max_part, max_nonzero):
         reco_phi[:, :, None]
     ], axis=-1)
 
-    reco_dict['particle_features'].append(reco_pf)
 
-    # --- extract the leading electron (PDG == 11) per event ---
+
+    # --- Swap leading electron into slot 0 ---
     pdg    = reco_pf[:, :, 9]
     energy = reco_pf[:, :, 0].copy()
-    energy[pdg != 11] = -np.inf  # non-electrons become -∞
+    energy[pdg != 11] = -np.inf                     # non-electrons → -∞
     has_elec = (pdg == 11).any(axis=1)
+    idx_all  = np.argmax(energy, axis=1)            # even for no-elec, gives a number
 
-    # prepare output: default to -999 everywhere
-    n_events, n_features = reco_pf.shape[0], reco_pf.shape[2]
-    reco_lead = np.full((n_events, n_features), -999.0)
+    # only swap for events that actually have an electron
+    for ev in np.where(has_elec)[0]:
+        lead_idx = idx_all[ev]
+        # swap row 0 and row lead_idx
+        reco_pf[ev, [0, lead_idx], :] = reco_pf[ev, [lead_idx, 0], :]
 
-    # for events with electrons, find the index of the max-energy one…
-    idx_all = np.argmax(energy, axis=1)     # gives something for every event
-    valid   = np.where(has_elec)[0]         # only these actually have electrons
-    reco_lead[valid] = reco_pf[valid, idx_all[valid]]
-    reco_dict['LeadingElectron'].append(reco_lead)
+    reco_dict['particle_features'].append(reco_pf)
 
-
-    # Concatenate lists in reco_dict (only one element per key here)
     for key in reco_dict:
         reco_dict[key] = np.concatenate(reco_dict[key], axis=0)
+        # Concatenate lists in reco_dict (only one element per key here)
+
 
     # --- Process Generator (gen) Quantities ---
     # Process inclusive kinematics for truth
@@ -180,7 +176,6 @@ def process_chunk(tmp_file, start, end, max_part, max_nonzero):
     gen_kin = np.stack(arrays, axis=-1)
     gen_dict['InclusiveKinematicsTruth'].append(gen_kin)
 
-    # Process Generator Particle Features
     # Apply a mask for final-state particles: generatorStatus == 1
     genStatus = tmp_file['MCParticles.generatorStatus'].array()[start:end]
     gen_parts = [
@@ -203,22 +198,21 @@ def process_chunk(tmp_file, start, end, max_part, max_nonzero):
         gen_phi[:, :, None]
     ], axis=-1)
 
+    # --- Swap leading electron into slot 0 ---
+    pdg    = gen_pf[:, :, 9]
+    energy = gen_pf[:, :, 0].copy()
+    energy[pdg != 11] = -np.inf                     # non-electrons → -∞
+    has_elec = (pdg == 11).any(axis=1)
+    idx_all  = np.argmax(energy, axis=1)            # even for no-elec, gives a number
+
+    # only swap for events that actually have an electron
+    for ev in np.where(has_elec)[0]:
+        lead_idx = idx_all[ev]
+        # swap row 0 and row lead_idx
+        gen_pf[ev, [0, lead_idx], :] = gen_pf[ev, [lead_idx, 0], :]
+
+
     gen_dict['particle_features'].append(gen_pf)
-
-    # --- extract the leading truth-electron (PDG == 11) per event ---
-    pdg_gen    = gen_pf[:, :, 9]
-    energy_gen = gen_pf[:, :, 0].copy()
-    energy_gen[pdg_gen != 11] = -np.inf
-
-    has_elec_gen = (pdg_gen == 11).any(axis=1)
-    n_events, n_features = gen_pf.shape[0], gen_pf.shape[2]
-    gen_lead = np.full((n_events, n_features), -999.0)
-
-    idxg_all = np.argmax(energy_gen, axis=1)
-    valid_g  = np.where(has_elec_gen)[0]
-    gen_lead[valid_g] = gen_pf[valid_g, idxg_all[valid_g]]
-
-    gen_dict['LeadingElectron'].append(gen_lead)
 
 
     # Concatenate lists in gen_dict

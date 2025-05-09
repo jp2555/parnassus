@@ -64,10 +64,12 @@ class DataLoader:
                            'vx', 'vy', 'vz',
                            'is electron','is muon', 'is photon',
                            'is neutral hadron','is charged hadron']
+
         self.evt_names = ['$MET_x$ [GeV]','$MET_y$ [GeV]','HT [GeV]',
                           'nelectron','nmuon','nphoton','nneutral','ncharged']
 
-                    
+        # self.evt_names = ['$x$', '$Q^2$ [GeV]$^2$','$W$', '$y$', '$\nu$']
+
         
         if self.corrector:            
             self.reference = [os.path.join(self.path, self.reference)]
