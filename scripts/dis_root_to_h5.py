@@ -11,15 +11,6 @@ np.object = object
 import uproot3 as uproot
 import h5py
 
-def get_eta_phi(px, py, pz):
-
-    p_mag = np.sqrt(px*px + py*py + pz*pz)
-    theta = np.arccos(pz / p_mag)
-    eta = -np.log(np.tan(theta/2))
-
-    phi = np.arctan2(py, px)
-    return eta, phi
-
 # Define global lists for keys and features
 kinematics_list = ['x', 'Q2', 'W', 'y', 'nu']
 
@@ -129,6 +120,16 @@ def swap_leading_electron(pf: np.ndarray, pdg_idx: int = 9):
     return pf
 
 
+def get_eta_phi(px, py, pz):
+
+    p_mag = np.sqrt(px*px + py*py + pz*pz)
+    theta = np.arccos(pz / p_mag)
+    eta = -np.log(np.tan(theta/2))
+
+    phi = np.arctan2(py, px)
+    return eta, phi
+
+
 def process_particle_features(tree, feats, start, end,
                               max_part, max_nonzero,
                               status_mask=None, recompute_energy=False):
@@ -190,6 +191,12 @@ def process_chunk(tmp_file, start, end, max_part, max_nonzero):
         status_mask=None, recompute_energy=False
     )
 
+    # compute multiplicity from the energy column (idx 0)
+    mult_reco = np.count_nonzero(reco['particle_features'][..., 0], axis=1)
+    reco['InclusiveKinematicsESigma'] = np.concatenate([
+        reco['InclusiveKinematicsESigma'], mult_reco[:, None]
+    ], axis=1)
+
     # --- Gen inclusive kinematics ---
     gen = {
         'InclusiveKinematicsTruth':
@@ -207,6 +214,13 @@ def process_chunk(tmp_file, start, end, max_part, max_nonzero):
         max_part, max_nonzero,
         status_mask=mask, recompute_energy=True
     )
+
+    # compute multiplicity for gen
+    mult_gen = np.count_nonzero(gen['particle_features'][..., 0], axis=1)
+    gen['InclusiveKinematicsTruth'] = np.concatenate([
+        gen['InclusiveKinematicsTruth'],
+        mult_gen[:, None]
+    ], axis=1)
 
     return reco, gen
 
