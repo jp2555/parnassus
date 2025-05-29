@@ -91,135 +91,126 @@ def append_to_dataset(h5f, dset_name, data, fixed_chunk_size=2000):
         dset.resize(new_shape)
         dset[old_shape[0]:] = data
 
+
+def load_branch_arrays(tree, branch, feats, start, end,
+                       pad: int = None, fill_value: float = None,
+                       squeeze: bool = False):
+    """
+    Load multiple flat arrays from branches like "branch.feat",
+    apply optional padding/filling, regularize, squeeze, and stack.
+    """
+    arrays = []
+    for feat in feats:
+        arr = tree[f"{branch}.{feat}"].array()[start:end]
+        if pad is not None:
+            arr = arr.pad(pad)
+        if fill_value is not None:
+            arr = arr.fillna(fill_value)
+        arr = arr.regular()
+        if squeeze:
+            arr = arr.squeeze()
+        arrays.append(arr)
+    return np.stack(arrays, axis=-1)  # shape (n_events, len(feats))
+
+
+def swap_leading_electron(pf: np.ndarray, pdg_idx: int = 9):
+    """
+    Find the highest-energy electron in each event, if any,
+    and swap it into slot 0.
+    """
+    pdg    = pf[:, :, pdg_idx]
+    energy = pf[:, :, 0].copy()
+    energy[pdg != 11] = -np.inf
+    has_elec = (pdg == 11).any(axis=1)
+    lead_idxs = np.argmax(energy, axis=1)
+    for ev in np.where(has_elec)[0]:
+        i = lead_idxs[ev]
+        pf[ev, [0, i], :] = pf[ev, [i, 0], :]
+    return pf
+
+
+def process_particle_features(tree, feats, start, end,
+                              max_part, max_nonzero,
+                              status_mask=None, recompute_energy=False):
+    """
+    - Optionally mask the raw arrays by status_mask.
+    - Pad/regularize to max_part, sort by energy, truncate to max_nonzero.
+    - Optionally recompute the E component from (px,py,pz,m).
+    - Always compute eta/phi and append as two new features.
+    - Always swap leading e⁻ → slot 0.
+    """
+    # 1) pull out raw arrays, apply mask if given
+    raws = [tree[feat].array()[start:end] for feat in feats]
+    if status_mask is not None:
+        raws = [r[status_mask] for r in raws]
+
+    # 2) pad/fill/regularize
+    parts = []
+    for arr in raws:
+        arr = arr.pad(max_part).fillna(0).regular()
+        parts.append(arr)
+
+    # 3) stack & sort/truncate
+    pf = np.stack(parts, axis=-1)
+    order = np.argsort(-pf[:, :, 0], axis=1)
+    pf = np.take_along_axis(pf, order[:, :, None], axis=1)
+    pf = pf[:, :max_nonzero, :]
+
+    # 4) optional E = sqrt(px²+py²+pz²+m²)
+    if recompute_energy:
+        px, py, pz, m = pf[:, :, 1], pf[:, :, 2], pf[:, :, 3], pf[:, :, 8]
+        pf[:, :, 0] = np.sqrt(px**2 + py**2 + pz**2 + m**2)
+
+    # 5) eta/phi → last two features
+    eta, phi = get_eta_phi(pf[:, :, 1], pf[:, :, 2], pf[:, :, 3])
+    pf = np.concatenate([pf, eta[:, :, None], phi[:, :, None]], axis=-1)
+
+    # 6) move leading electron to slot 0
+    pf = swap_leading_electron(pf, pdg_idx=9)
+    return pf
+
+
 def process_chunk(tmp_file, start, end, max_part, max_nonzero):
     """
-    Process a chunk of events [start:end] from the open root tree.
-    Returns two dictionaries (one for reco, one for gen) where each key holds an array
-    for that set of events.
+    Process a chunk of events [start:end] and return reco & gen dicts.
     """
-
-    reco_dict = {  #https://arxiv.org/pdf/2110.05505
-        'particle_features': [],
-        'InclusiveKinematicsESigma': [],
-        # 'LeadingElectron': [],
-        # 'InclusiveKinematicsDA': [],
-        # 'InclusiveKinematicsElectron': [],
-        # 'InclusiveKinematicsJB': [],
-        # 'InclusiveKinematicsSigma': []
-    }
-    gen_dict = {
-        'particle_features': [],
-        'InclusiveKinematicsTruth': [],
-        # 'LeadingElectron': []
+    # --- Reco inclusive kinematics ---
+    reco = {
+        'InclusiveKinematicsESigma':
+            load_branch_arrays(tmp_file, "InclusiveKinematicsESigma",
+                               kinematics_list, start, end,
+                               pad=1, fill_value=0, squeeze=True),
+        # add other InclusiveKinematics* as needed...
     }
 
-    # --- Process Reconstructed (reco) Quantities ---
-    # For each inclusive kinematics group, load each feature in the kinematics list.
-    for key in reco_dict.keys():
-        if 'InclusiveKinematics' in key:
-            arrays = [
-                tmp_file[f"{key}.{feat}"].array()[start:end]
-                    .pad(1).fillna(0).regular().squeeze()
-                for feat in kinematics_list
-            ]  # .pad(1).fillna(0).regular() ensures the data are valid for saving.
-            arr = np.stack(arrays, axis=-1)  # Shape: (n_events_chunk, 5)
-            reco_dict[key].append(arr)
+    # --- Reco particle features ---
+    reco['particle_features'] = process_particle_features(
+        tmp_file, reco_particle_list, start, end,
+        max_part, max_nonzero,
+        status_mask=None, recompute_energy=False
+    )
 
-    # Process Reconstructed Particle Features
-    parts = [
-        tmp_file[feat].array()[start:end].pad(max_part).fillna(0).regular()
-        for feat in reco_particle_list
-    ]
-    # Stack so that shape is (n_events_chunk, max_part, num_features)
-    reco_pf = np.stack(parts, axis=-1)
-    order = np.argsort(-reco_pf[:, :, 0], axis=1)  #sort by energy
-    reco_pf = np.take_along_axis(reco_pf, order[:, :, None], axis=1)
-    reco_pf = reco_pf[:, :max_nonzero, :]
+    # --- Gen inclusive kinematics ---
+    gen = {
+        'InclusiveKinematicsTruth':
+            load_branch_arrays(tmp_file, "InclusiveKinematicsTruth",
+                               kinematics_list, start, end,
+                               pad=None, fill_value=None, squeeze=True)
+    }
 
-    #Add Reco eta and phi
-    reco_eta, reco_phi = get_eta_phi(reco_pf[:,:,1],reco_pf[:,:,2],reco_pf[:,:,3])
-    reco_pf = np.concatenate([
-        reco_pf,
-        reco_eta[:, :, None],
-        reco_phi[:, :, None]
-    ], axis=-1)
+    # --- Gen particle features (truth only, status==1 + recompute E) ---
+    gen_status = tmp_file['MCParticles.generatorStatus'] \
+                     .array()[start:end]
+    mask = (gen_status == 1)
+    gen['particle_features'] = process_particle_features(
+        tmp_file, gen_particle_list, start, end,
+        max_part, max_nonzero,
+        status_mask=mask, recompute_energy=True
+    )
+
+    return reco, gen
 
 
-
-    # --- Swap leading electron into slot 0 ---
-    pdg    = reco_pf[:, :, 9]
-    energy = reco_pf[:, :, 0].copy()
-    energy[pdg != 11] = -np.inf                     # non-electrons → -∞
-    has_elec = (pdg == 11).any(axis=1)
-    idx_all  = np.argmax(energy, axis=1)            # even for no-elec, gives a number
-
-    # only swap for events that actually have an electron
-    for ev in np.where(has_elec)[0]:
-        lead_idx = idx_all[ev]
-        # swap row 0 and row lead_idx
-        reco_pf[ev, [0, lead_idx], :] = reco_pf[ev, [lead_idx, 0], :]
-
-    reco_dict['particle_features'].append(reco_pf)
-
-    for key in reco_dict:
-        reco_dict[key] = np.concatenate(reco_dict[key], axis=0)
-        # Concatenate lists in reco_dict (only one element per key here)
-
-
-    # --- Process Generator (gen) Quantities ---
-    # Process inclusive kinematics for truth
-    arrays = [
-        tmp_file[f'InclusiveKinematicsTruth.{feat}'].array()[start:end]
-        .regular().squeeze()
-        for feat in kinematics_list
-    ]
-    gen_kin = np.stack(arrays, axis=-1)
-    gen_dict['InclusiveKinematicsTruth'].append(gen_kin)
-
-    # Apply a mask for final-state particles: generatorStatus == 1
-    genStatus = tmp_file['MCParticles.generatorStatus'].array()[start:end]
-    gen_parts = [
-        tmp_file[feat].array()[start:end][genStatus == 1]
-        .pad(max_part).fillna(0).regular()
-        for feat in gen_particle_list
-    ]
-    # Stack so that shape is (n_events_chunk, max_part, num_features)
-    gen_pf = np.stack(gen_parts, axis=-1)
-    order_gen = np.argsort(-gen_pf[:, :, 0], axis=1)  #sort by energy
-    gen_pf = np.take_along_axis(gen_pf, order_gen[:, :, None], axis=1)
-    gen_pf = gen_pf[:, :max_nonzero, :]
-    #calc E
-    gen_pf[:,:,0] = np.sqrt(gen_pf[:,:,1]**2 + gen_pf[:,:,2]**2 + gen_pf[:,:,3]**2 + gen_pf[:,:,8]**2)
-
-    gen_eta, gen_phi = get_eta_phi(gen_pf[:,:,1],gen_pf[:,:,2],gen_pf[:,:,3])
-    gen_pf = np.concatenate([
-        gen_pf,
-        gen_eta[:, :, None],
-        gen_phi[:, :, None]
-    ], axis=-1)
-
-    # --- Swap leading electron into slot 0 ---
-    pdg    = gen_pf[:, :, 9]
-    energy = gen_pf[:, :, 0].copy()
-    energy[pdg != 11] = -np.inf                     # non-electrons → -∞
-    has_elec = (pdg == 11).any(axis=1)
-    idx_all  = np.argmax(energy, axis=1)            # even for no-elec, gives a number
-
-    # only swap for events that actually have an electron
-    for ev in np.where(has_elec)[0]:
-        lead_idx = idx_all[ev]
-        # swap row 0 and row lead_idx
-        gen_pf[ev, [0, lead_idx], :] = gen_pf[ev, [lead_idx, 0], :]
-
-
-    gen_dict['particle_features'].append(gen_pf)
-
-
-    # Concatenate lists in gen_dict
-    for key in gen_dict:
-        gen_dict[key] = np.concatenate(gen_dict[key], axis=0)
-
-    return reco_dict, gen_dict
 
 
 def process_files(file_list, base_path, output_file,
