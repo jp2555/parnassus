@@ -20,12 +20,8 @@ labels = { #file names
 
 # Hardcoded pid booleans
 neutral_hads = [
-    111,   # pi0
     2112,  # neutron
     130,   # K0L
-    310,   # K0S
-    311,   # K0
-    3122,  # Lambda0
 ]
 
 charged_hads = [
