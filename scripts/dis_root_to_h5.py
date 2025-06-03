@@ -286,7 +286,7 @@ if __name__ == "__main__":
                         default='/global/cfs/cdirs/m3246/eic/NC_DIS_18x275/minQ2=100',
                         help='Folder containing ROOT files (data and MC)')
     parser.add_argument('--data-output',
-                        default='/global/cfs/cdirs/m3246/eic/NC_DIS_18x275/h5_files',
+                        default='/global/cfs/cdirs/m3246/eic/NC_DIS_18x275/h5_files/minQ2=100',
                         help='Output folder for the HDF5 file')
     parser.add_argument('--sample',
                         default='NC_DIS_Q2_100',

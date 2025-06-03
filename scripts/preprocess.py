@@ -86,13 +86,12 @@ def process(p, gen_ele):
     new_p[:,:,10] = np.isin(np.abs(p[:,1:,PID_INDEX]).astype(int), charged_hads) # is charged hadron
 
 
-    # ic(new_p[1:3])
+    # ic("after mask", new_p[1:3])
     new_p = new_p*mask[:,np.newaxis,np.newaxis]
-    print("\n\nLine 84, after MASK\n")
-    # ic(new_p[1,:3])
+    # ic("before mask", new_p[1,:3])
 
 
-    #Now Edit electron, before returning
+    #Now Edit electron, return from here, append to event_data
     new_ele = np.zeros(shape=(electrons.shape[0], N_Ele_Feat)) #[Nevt, Nfeat]
     new_ele[:,0] = electrons[:,-2]
     new_ele[:,1] = electrons[:,-1]
@@ -103,124 +102,151 @@ def process(p, gen_ele):
 
     return new_p, new_ele
 
+def preprocess_in_chunks(path, labels,
+                         chunk_size=10_000,
+                         nevent_max=-1, npart_max=-1):
+    """
+    Read each input file in “chunks” of size chunk_size, process those events,
+    split into train/val/test, and append directly to three output HDF5s.
+    """
+    # 1) Prepare three output files with extendable datasets
+    train_out = h5.File(os.path.join(path, 'train_eic.h5'), 'w')
+    val_out   = h5.File(os.path.join(path, 'val_eic.h5'),   'w')
+    test_out  = h5.File(os.path.join(path, 'test_eic.h5'),  'w')
 
-def preprocess(path, labels, nevent_max=-1, npart_max=-1):
-
-    train = {
-        'gen_events':[],
-        'gen_particles':[],
-        'reco_events':[],
-        'reco_particles':[],
+    # create these datasets on first chunk; then we will resize/append.
+    outputs = {
+        'train': {'file': train_out, 'dsets': {}},
+        'val':   {'file': val_out,   'dsets': {}},
+        'test':  {'file': test_out,  'dsets': {}}
     }
 
-    test = {
-        'gen_events':[],
-        'gen_particles':[],
-        'reco_events':[],
-        'reco_particles':[],
-    }
-
-    val = {
-        'gen_events':[],
-        'gen_particles':[],
-        'reco_events':[],
-        'reco_particles':[],
+    # Split fractions:
+    splits = {
+        'train': (0.00, 0.63),
+        'val':   (0.63, 0.70),
+        'test':  (0.70, 1.00)
     }
 
     for label in labels:
+        infile = h5.File(os.path.join(path, label), 'r')
+        # Determine how many total events are in this file (ignore nevent_max for now):
+        ntotal_in_file = infile['reco_particle_features'].shape[0]
+        if nevent_max > 0:
+            ntotal = min(nevent_max, ntotal_in_file)
+        else:
+            ntotal = ntotal_in_file
 
-        with h5.File(os.path.join(path,label),"r") as h5f:
+        # Loop over chunks of events [i : i+chunk_size]
+        for start in range(0, ntotal, chunk_size):
+            end = min(start + chunk_size, ntotal)
 
-            ntotal = h5f['reco_particle_features'][:nevent_max].shape[0]
+            # 2) Read just this slice from disk (no “[:]” of the entire dataset)
+            reco_particles_chunk = infile['reco_particle_features'][start:end, :npart_max].astype(np.float32)
+            reco_events_chunk    = infile['reco_InclusiveKinematicsESigma'][start:end].astype(np.float32)
 
-            reco_particles = h5f['reco_particle_features'][:nevent_max,:npart_max].astype(np.float32)
-            reco_events = h5f['reco_InclusiveKinematicsESigma'].astype(np.float32)
+            gen_particles_chunk  = infile['gen_particle_features'][start:end, :npart_max].astype(np.float32)
+            gen_events_chunk     = infile['gen_InclusiveKinematicsTruth'][start:end].astype(np.float32)
 
-            gen_particles = h5f['gen_particle_features'][:nevent_max,:npart_max].astype(np.float32)
-            gen_events = h5f['gen_InclusiveKinematicsTruth'].astype(np.float32)
+            # Extract the “gen electron” column to pass to process():
+            gen_electrons_chunk = gen_particles_chunk[:, 0, :].copy()
 
-            gen_electrons = gen_particles[:,0,:]
+            ic("Before Process (chunk)", np.shape(reco_particles_chunk))
+            reco_particles_proc, reco_electrons_proc = process(reco_particles_chunk, gen_electrons_chunk)
+            ic("After Process (chunk)", np.shape(reco_particles_proc))
 
-            ic("Before Process", np.shape(reco_particles))
-            reco_particles, reco_electrons = process(reco_particles, gen_electrons)
-            ic("After Process", np.shape(reco_particles))
+            ic("Before Process (gen chunk)", np.shape(gen_particles_chunk))
+            gen_particles_proc, gen_electrons_proc = process(gen_particles_chunk, gen_electrons_chunk)
+            ic("After Process (gen chunk)", np.shape(gen_particles_proc))
 
+            # Append electron features onto “events” arrays:
+            gen_events_proc  = np.hstack((gen_events_chunk,  gen_electrons_proc))
+            reco_events_proc = np.hstack((reco_events_chunk, reco_electrons_proc))
 
-            ic("Before Process", np.shape(gen_particles))
-            gen_particles, gen_electrons = process(gen_particles, gen_electrons)
-            ic("After Process", np.shape(gen_particles))
+            # 3) Now split this chunk into train/val/test by index within the chunk
+            nevents_in_chunk = end - start
+            for split_name, (f0, f1) in splits.items():
+                i0 = int(f0 * nevents_in_chunk)
+                i1 = int(f1 * nevents_in_chunk)
 
-            ic(np.shape(gen_events))
-            gen_events = np.hstack((gen_events, gen_electrons))
-            ic(np.shape(gen_events))
-            reco_events = np.hstack((reco_events, reco_electrons))
+                gen_p_split  = gen_particles_proc[i0:i1]
+                reco_p_split = reco_particles_proc[i0:i1]
+                gen_e_split  = gen_events_proc[i0:i1]
+                reco_e_split = reco_events_proc[i0:i1]
 
-            # Train, Val, test Split
-            datasets = {'train': train, 'val': val, 'test': test}
-            splits = { 'train': (0, 0.63), 'val':   (0.63, 0.7), 'test':  (0.7, 1.0) }
+                # 4) Append four arrays into the corresponding output HDF5's datasets:
+                out = outputs[split_name]
+                hf = out['file']
 
-            for split_name, (start_frac, end_frac) in splits.items():
-                start = int(start_frac * ntotal)
-                end = int(end_frac * ntotal)
+                # On the first chunk, create the datasets if they don’t yet exist.
+                if not out['dsets']:
+                    # Create four extendable datasets with maxshape=(None, ...)
+                    #   We know the number of features/dims, so we set shape=(0, dims…)
+                    #   and allow maxshape on axis=0 to be None.
+                    out['dsets']['gen_particles']  = hf.create_dataset(
+                        'gen_particles',
+                        shape=(0,) + gen_p_split.shape[1:],
+                        maxshape=(None,) + gen_p_split.shape[1:],
+                        dtype=np.float32
+                    )
+                    out['dsets']['reco_particles'] = hf.create_dataset(
+                        'reco_particles',
+                        shape=(0,) + reco_p_split.shape[1:],
+                        maxshape=(None,) + reco_p_split.shape[1:],
+                        dtype=np.float32
+                    )
+                    out['dsets']['gen_events']     = hf.create_dataset(
+                        'gen_events',
+                        shape=(0,) + gen_e_split.shape[1:],
+                        maxshape=(None,) + gen_e_split.shape[1:],
+                        dtype=np.float32
+                    )
+                    out['dsets']['reco_events']    = hf.create_dataset(
+                        'reco_events',
+                        shape=(0,) + reco_e_split.shape[1:],
+                        maxshape=(None,) + reco_e_split.shape[1:],
+                        dtype=np.float32
+                    )
 
-                for key, data in zip(
-                    ['gen_particles', 'reco_particles', 'gen_events', 'reco_events'],
-                    [gen_particles, reco_particles, gen_events, reco_events]
-                ):
-                    datasets[split_name][key].append(data[start:end])
-            # FIXME: 5/29: make sure we don't just pull the 200GB dataset into memory all at once...
+                # Helper to append a NumPy array to an existing extendable dataset:
+                def append_to_dset(dset, array):
+                    old_n = dset.shape[0]
+                    new_n = old_n + array.shape[0]
+                    dset.resize((new_n,) + dset.shape[1:])
+                    dset[old_n:new_n, ...] = array
 
+                # Append each split‐chunk:
+                append_to_dset(out['dsets']['gen_particles'],  gen_p_split)
+                append_to_dset(out['dsets']['reco_particles'], reco_p_split)
+                append_to_dset(out['dsets']['gen_events'],     gen_e_split)
+                append_to_dset(out['dsets']['reco_events'],    reco_e_split)
 
-    for key in train:        
-        train[key] = np.concatenate(train[key],0)        
-    for key in test:
-        test[key] = np.concatenate(test[key],0)
-    for key in val:
-        val[key] = np.concatenate(val[key],0)
+        infile.close()
 
-
-    for d in [train, val, test]:
-        (
-            d['gen_particles'],
-            d['reco_particles'],
-            d['gen_events'],
-            d['reco_events']
-        ) = shuffle(
-            d['gen_particles'],
-            d['reco_particles'],
-            d['gen_events'],
-            d['reco_events'],
-            random_state=42  # makes shuffling reproducible
-        )
-
-    return train, val, test
-
-if __name__=='__main__':
-
-    parser = OptionParser(usage="%prog [opt]  inputFiles")
-    parser.add_option("--folder", type="string", default='/global/cfs/cdirs/m3246/eic/NC_DIS_18x275/', help="Folder containing input files")
-    parser.add_option("--nevent_max", type="int", default='10_000_000', help="max number of events")
-    parser.add_option("--npart_max", type="int", default='200', help="max number of particses per event")
-    (flags, args) = parser.parse_args()
-
-    train, val, test = preprocess(os.path.join(flags.folder, 'h5_files'),labels, flags.nevent_max, flags.npart_max)
-
-    with h5.File('{}/train_{}.h5'.format(os.path.join(flags.folder, 'h5_files'),"eic"), "w") as fh5:
-        dset = fh5.create_dataset('gen_particles', data=train['gen_particles'])
-        dset = fh5.create_dataset('gen_events', data=train['gen_events'])
-        dset = fh5.create_dataset('reco_particles', data=train['reco_particles'])
-        dset = fh5.create_dataset('reco_events', data=train['reco_events'])
-
-
-    with h5.File('{}/test_{}.h5'.format(os.path.join(flags.folder, 'h5_files'),"eic"), "w") as fh5:
-        dset = fh5.create_dataset('gen_particles', data=test['gen_particles'])
-        dset = fh5.create_dataset('gen_events', data=test['gen_events'])
-        dset = fh5.create_dataset('reco_particles', data=test['reco_particles'])
-        dset = fh5.create_dataset('reco_events', data=test['reco_events'])
+    # Close all three output files
+    for split_name in outputs:
+        outputs[split_name]['file'].close()
 
 
-    with h5.File('{}/val_{}.h5'.format(os.path.join(flags.folder, 'h5_files'),"eic"), "w") as fh5:
-        dset = fh5.create_dataset('gen_particles', data=val['gen_particles'])
-        dset = fh5.create_dataset('gen_events', data=val['gen_events'])
-        dset = fh5.create_dataset('reco_particles', data=val['reco_particles'])
-        dset = fh5.create_dataset('reco_events', data=val['reco_events'])
+if __name__ == '__main__':
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Chunked preprocess")
+    parser.add_argument("--folder", type=str,
+                        default="/global/cfs/cdirs/m3246/eic/NC_DIS_18x275/",
+                        help="Folder containing input files")
+    parser.add_argument("--chunk_size", type=int, default=10_000,
+                        help="How many events to read/process per chunk")
+    parser.add_argument("--nevent_max", type=int, default=-1,
+                        help="Maximum number of events (per file) to read; -1 means all")
+    parser.add_argument("--npart_max", type=int, default=200,
+                        help="Maximum number of particles per event")
+    args = parser.parse_args()
+
+    preprocess_in_chunks(
+        os.path.join(args.folder, "h5_files"),
+        labels,
+        chunk_size=args.chunk_size,
+        nevent_max=args.nevent_max,
+        npart_max=args.npart_max
+    )
