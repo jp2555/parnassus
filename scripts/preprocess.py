@@ -49,6 +49,9 @@ def process(p, gen_ele):
     N_Ele_Feat = 6     # eta, phi, E, xyz-vert
     N_Part_Feat = 11   # ^ + five PID booleans
 
+    N_particles = np.shape(p)[1]
+    N_events = np.shape(p)[0]
+
     electrons = gen_ele  #grandfathered from previous normalization.
     #Kept for now, may want to normalized by neutrino 4-vector for charged-current
 
@@ -74,6 +77,14 @@ def process(p, gen_ele):
     new_p[:,:,8] = np.abs(p[:,:,PID_INDEX]) == 22.                 # is photon
     new_p[:,:,9] = np.isin(np.abs(p[:,:,PID_INDEX]).astype(int), neutral_hads)  # is neutral hadron
     new_p[:,:,10] = np.isin(np.abs(p[:,:,PID_INDEX]).astype(int), charged_hads) # is charged hadron
+
+    #For convenience, the first particle in is the electron. For training,
+    #It's safe to avoid this, so we put the electron at a random index
+    rand_idx = np.random.randint(0, N_particles, size=N_events)
+    first_copy = new_p[np.arange(N_events), 0, :].copy()
+    new_p[np.arange(N_events), 0, :] = new_p[np.arange(N_events), rand_idx, :]
+    new_p[np.arange(N_events), rand_idx, :] = first_copy
+    #Unfortunatley doubles memory...
 
 
     #Now Edit electron, return from here, append to event_data
