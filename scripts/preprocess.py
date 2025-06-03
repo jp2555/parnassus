@@ -49,42 +49,31 @@ def process(p, gen_ele):
     N_Ele_Feat = 6     # eta, phi, E, xyz-vert
     N_Part_Feat = 11   # ^ + five PID booleans
 
-    electrons = p[:,0,:]
-    mask = np.abs(electrons[:,PID_INDEX]) == 11   # mask if first particle is actually electron
-    ic(np.shape(mask[:,np.newaxis]))
-    ic(np.shape(electrons))
-    ic(np.shape(gen_ele))
-    ic(np.shape(p))
-    electrons = np.where(mask[:, np.newaxis], electrons, gen_ele)
-
+    electrons = gen_ele  #grandfathered from previous normalization.
+    #Kept for now, may want to normalized by neutrino 4-vector for charged-current
 
     # Get log(P_rel)
     e_P = electrons[:,0]
-    P_rel = np.ma.masked_invalid(np.divide(p[:, 1:, 0], e_P[:, np.newaxis]))
+    P_rel = np.ma.masked_invalid(np.divide(p[:, :, 0], e_P[:, np.newaxis]))
     log_P_rel = np.ma.log(P_rel)
     log_P_rel = log_P_rel.filled(0)
 
     #new particles array excludes first particle (electron)
-    new_p = np.zeros(shape=(p.shape[0],p.shape[1]-1, N_Part_Feat))
+    new_p = np.zeros(shape=(p.shape[0],p.shape[1], N_Part_Feat))
     
-    # new_p[:,:,0] = p[:,1:,-2] + e_eta[:, np.newaxis] # eta rel
-    new_p[:,:,0] = p[:,1:,-2] + electrons[:,-2][:, np.newaxis]      # eta rel
-    new_p[:,:,1] = p[:,1:,-1]                                       # phi
+    # new_p[:,:,0] = p[:,:,-2] + e_eta[:, np.newaxis] # eta rel
+    new_p[:,:,0] = p[:,:,-2] + electrons[:,-2][:, np.newaxis]      # eta rel
+    new_p[:,:,1] = p[:,:,-1]                                       # phi
     new_p[:,:,2] = log_P_rel                                        # log(P_rel)
-    new_p[:,:,3] = p[:,1:,4]  + electrons[:,4][:, np.newaxis]       # x-vert.
-    new_p[:,:,4] = p[:,1:,5]  + electrons[:,5][:, np.newaxis]       # y-vert.
-    new_p[:,:,5] = p[:,1:,6]  + electrons[:,6][:, np.newaxis]       # z-vert.
+    new_p[:,:,3] = p[:,:,4]  + electrons[:,4][:, np.newaxis]       # x-vert.
+    new_p[:,:,4] = p[:,:,5]  + electrons[:,5][:, np.newaxis]       # y-vert.
+    new_p[:,:,5] = p[:,:,6]  + electrons[:,6][:, np.newaxis]       # z-vert.
 
-    new_p[:,:,6] = np.abs(p[:,1:,PID_INDEX]) == 11.                 # is electron
-    new_p[:,:,7] = np.abs(p[:,1:,PID_INDEX]) == 13.                 # is muon
-    new_p[:,:,8] = np.abs(p[:,1:,PID_INDEX]) == 22.                 # is photon
-    new_p[:,:,9] = np.isin(np.abs(p[:,1:,PID_INDEX]).astype(int), neutral_hads)  # is neutral hadron
-    new_p[:,:,10] = np.isin(np.abs(p[:,1:,PID_INDEX]).astype(int), charged_hads) # is charged hadron
-
-
-    # ic("after mask", new_p[1:3])
-    new_p = new_p*mask[:,np.newaxis,np.newaxis]
-    # ic("before mask", new_p[1,:3])
+    new_p[:,:,6] = np.abs(p[:,:,PID_INDEX]) == 11.                 # is electron
+    new_p[:,:,7] = np.abs(p[:,:,PID_INDEX]) == 13.                 # is muon
+    new_p[:,:,8] = np.abs(p[:,:,PID_INDEX]) == 22.                 # is photon
+    new_p[:,:,9] = np.isin(np.abs(p[:,:,PID_INDEX]).astype(int), neutral_hads)  # is neutral hadron
+    new_p[:,:,10] = np.isin(np.abs(p[:,:,PID_INDEX]).astype(int), charged_hads) # is charged hadron
 
 
     #Now Edit electron, return from here, append to event_data
@@ -96,6 +85,9 @@ def process(p, gen_ele):
     new_ele[:,4] = electrons[:, 5]
     new_ele[:,5] = electrons[:, 6]
 
+    # ic(new_p[:3,:5,:])
+    # ic(electrons[:3,:])
+    # ic(new_ele[:3,:])
     return new_p, new_ele
 
 def preprocess_in_chunks(path, labels,
