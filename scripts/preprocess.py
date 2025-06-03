@@ -244,7 +244,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     preprocess_in_chunks(
-        os.path.join(args.folder, "h5_files"),
+        os.path.join(args.folder, "h5_files/minQ2=100"),
         labels,
         chunk_size=args.chunk_size,
         nevent_max=args.nevent_max,
