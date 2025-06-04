@@ -94,6 +94,12 @@ def process(p, gen_ele):
     #Unfortunatley doubles memory...
 
 
+
+    #Just in case we want to save RecoElectron to event-level, uncomment below
+    # original_electrons = p[:, 0, :]                           # shape: (N_events, N_features)
+    # ele_mask = np.abs(original_electrons[:, PID_INDEX]) == 11     # shape: (N_events)
+    # electrons = np.where(ele_mask[:, None], original_electrons, 0.0)
+
     #Now Edit electron, return from here, append to event_data
     new_ele = np.zeros(shape=(electrons.shape[0], N_Ele_Feat)) #[Nevt, Nfeat]
     new_ele[:,0] = electrons[:,-2]
