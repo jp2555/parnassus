@@ -46,7 +46,7 @@ def process(p, gen_ele):
     '''
 
     # Return Feature Dimensions
-    N_Ele_Feat = 6     # eta, phi, E, xyz-vert
+    N_Ele_Feat = 7     # eta, phi, E, xyz-vert, E_miss
     N_Part_Feat = 11   # ^ + five PID booleans
 
     N_particles = np.shape(p)[1]
@@ -61,10 +61,17 @@ def process(p, gen_ele):
     log_P_rel = np.ma.log(P_rel)
     log_P_rel = log_P_rel.filled(0)
 
+    # Get E_miss. Sum each axis separatley, then get magnitude
+    # E_miss is as single scalar per event
+    momenta = p[:, :, 1:4]
+    total_momentum = momenta.sum(axis=1)
+    E_miss = np.linalg.norm(total_momentum, axis=1)
+
     #new particles array excludes first particle (electron)
     new_p = np.zeros(shape=(p.shape[0],p.shape[1], N_Part_Feat))
     
-    # new_p[:,:,0] = p[:,:,-2] + e_eta[:, np.newaxis] # eta rel
+    #Eta, Phi, and E in that order, grandfathered from older code.
+    #No particularly strong reason in this case
     new_p[:,:,0] = p[:,:,-2] + electrons[:,-2][:, np.newaxis]      # eta rel
     new_p[:,:,1] = p[:,:,-1]                                       # phi
     new_p[:,:,2] = log_P_rel                                        # log(P_rel)
@@ -96,9 +103,11 @@ def process(p, gen_ele):
     new_ele[:,4] = electrons[:, 5]
     new_ele[:,5] = electrons[:, 6]
 
+    new_ele[:,6] = E_miss
+
     # ic(new_p[:3,:5,:])
-    # ic(electrons[:3,:])
-    # ic(new_ele[:3,:])
+    ic(electrons[:3,:])
+    ic(new_ele[:3,:])
     return new_p, new_ele
 
 def preprocess_in_chunks(path, labels,

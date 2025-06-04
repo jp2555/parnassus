@@ -2,7 +2,7 @@ import os
 import gc
 import fnmatch
 import argparse
-import logging
+from icecream import ic
 
 import numpy as np
 np.str = str
@@ -132,7 +132,8 @@ def get_eta_phi(px, py, pz):
 
 def process_particle_features(tree, feats, start, end,
                               max_part, max_nonzero,
-                              status_mask=None, recompute_energy=False):
+                              status_mask=None,
+                              recompute_energy=False):
     """
     - Optionally mask the raw arrays by status_mask.
     - Pad/regularize to max_part, sort by energy, truncate to max_nonzero.
@@ -145,26 +146,35 @@ def process_particle_features(tree, feats, start, end,
     if status_mask is not None:
         raws = [r[status_mask] for r in raws]
 
-    # 2) pad/fill/regularize
+    # 2) pad/fill/regularize, then stack features for main array
     parts = []
     for arr in raws:
         arr = arr.pad(max_part).fillna(0).regular()
         parts.append(arr)
-
-    # 3) stack & sort/truncate
     pf = np.stack(parts, axis=-1)
+
+
+    # 3) optional E = sqrt(px²+py²+pz²+m²) (already done for reco)
+    if recompute_energy:
+        mask = (pf[:, :, 0] == 1)  #If not final state, set 0.0
+        pf = np.where(mask[:, :, None], pf, 0.0)
+        px, py, pz, m = pf[:, :, 1], pf[:, :, 2], pf[:, :, 3], pf[:, :, 8]
+        pf[:, :, 0] = np.sqrt(px**2 + py**2 + pz**2 + m**2)
+
+    # 4) sort/truncate by E
     order = np.argsort(-pf[:, :, 0], axis=1)
     pf = np.take_along_axis(pf, order[:, :, None], axis=1)
     pf = pf[:, :max_nonzero, :]
 
-    # 4) optional E = sqrt(px²+py²+pz²+m²)
-    if recompute_energy:
-        px, py, pz, m = pf[:, :, 1], pf[:, :, 2], pf[:, :, 3], pf[:, :, 8]
-        pf[:, :, 0] = np.sqrt(px**2 + py**2 + pz**2 + m**2)
-
     # 5) eta/phi → last two features
     eta, phi = get_eta_phi(pf[:, :, 1], pf[:, :, 2], pf[:, :, 3])
     pf = np.concatenate([pf, eta[:, :, None], phi[:, :, None]], axis=-1)
+
+    momenta = pf[:, :, 1:4]
+    total_momentum = momenta.sum(axis=1)
+    E_miss = np.linalg.norm(total_momentum, axis=1)
+    # ic(total_momentum)
+    # ic(E_miss)
 
     # 6) move leading electron to slot 0
     pf = swap_leading_electron(pf, pdg_idx=9)
@@ -176,9 +186,10 @@ def process_chunk(tmp_file, start, end, max_part, max_nonzero):
     Process a chunk of events [start:end] and return reco & gen dicts.
     """
     # --- Reco inclusive kinematics ---
+    scheme = 'ESigma'
     reco = {
-        'InclusiveKinematicsESigma':
-            load_branch_arrays(tmp_file, "InclusiveKinematicsESigma",
+        f'InclusiveKinematics{scheme}':
+            load_branch_arrays(tmp_file, f"InclusiveKinematics{scheme}",
                                kinematics_list, start, end,
                                pad=1, fill_value=0, squeeze=True),
         # add other InclusiveKinematics* as needed...
@@ -193,8 +204,8 @@ def process_chunk(tmp_file, start, end, max_part, max_nonzero):
 
     # compute multiplicity from the energy column (idx 0)
     mult_reco = np.count_nonzero(reco['particle_features'][..., 0], axis=1)
-    reco['InclusiveKinematicsESigma'] = np.concatenate([
-        reco['InclusiveKinematicsESigma'], mult_reco[:, None]
+    reco[f'InclusiveKinematics{scheme}'] = np.concatenate([
+        reco[f'InclusiveKinematics{scheme}'], mult_reco[:, None]
     ], axis=1)
 
     # --- Gen inclusive kinematics ---
