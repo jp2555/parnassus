@@ -63,7 +63,7 @@ def process(p, gen_ele):
 
     # Get E_miss. Sum each axis separatley, then get magnitude
     # E_miss is as single scalar per event
-    momenta = p[:, :, 1:4]
+    momenta = p[:, :, 1:3] #1:3 excludes Z. change to 1:4 to include
     total_momentum = momenta.sum(axis=1)
     E_miss = np.linalg.norm(total_momentum, axis=1)
 
@@ -112,8 +112,8 @@ def process(p, gen_ele):
     new_ele[:,6] = E_miss
 
     # ic(new_p[:3,:5,:])
-    ic(electrons[:3,:])
-    ic(new_ele[:3,:])
+    # ic(electrons[:3,:])
+    # ic(new_ele[:3,:])
     return new_p, new_ele
 
 def preprocess_in_chunks(path, labels,
