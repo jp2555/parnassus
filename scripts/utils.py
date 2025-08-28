@@ -65,9 +65,9 @@ class DataLoader:
                                   0.5453464, 1.8222283, 5.755058,
                                   2.3056376, 0.4584204, 94.97458, 0.051722374])
 
-        self.part_names = ['$p_x$', '$p_y$', 'p_z$)',
+        self.part_names = ['\eta rel', '$\phi$', 'log(P_rel)',
                            'vx', 'vy', 'vz',
-                           'charge','mass', 'PDG','time']
+                           'is electron','is muon', 'is photon','is neutral hadron','is charged hadron']
 
         self.evt_names = ['$x$', '$Q^2$ [GeV]$^2$','$W$', 
                           '$y$', '$\nu$', 'multiplicity',
