@@ -48,27 +48,31 @@ class DataLoader:
         if self.corrector:
             assert len(self.correction) > 0 and len(self.reference) > 0, "ERROR: Reference and Correction not given"
         
-        self.mean_part = np.array([0.0, 0.0, 0.255,
-                                   0.03836162 , 0.06146408 , 0.06212494,
-                                   0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
-        self.std_part = np.array([1.0 , 1.0 , 0.6952,
-                                  0.57357428, 0.58680139, 2.94017443,
-                                  1.0, 1.0, 1.0, 1.0, 1.0, 1.0 ])
+        # EIC samples at gen level
+        self.mean_part = np.array([0.00080365845, -0.24144639, -0.3366905,
+                                   0.0011137375, 13.186909, 0.0058670035,
+                                   0.000115850715, 0.061021138, 0.0074525382, 0.06180432])
+        self.std_part = np.array([0.7831262 , 0.9018317 , 16.519548,
+                                  13.571665, 376.85583, 0.07638007,
+                                  0.010763256, 0.23936594, 0.08600268, 0.24079904])
 
-        self.mean_evt =  np.array([-9.03940100e-01, -5.47091213e-01,  1.42402418e+03,
-                                   0.275, 0.188, 32.7, 22.3, 94.7])
-        self.std_evt  = np.array([45.25099801,  43.78186693, 181.1162556,
-                                  0.542, 0.455, 12.5, 8.39, 31.4])
+        self.mean_evt =  np.array([0.10355554, 248.80571,  64.74869,
+                                   0.2866266, 3023.8135, 27.30113, 
+                                   -0.72613, -0.0016355237, 16.64639, 
+                                   -0.014107646, -6.525931e-05, 0.55739784, 6.874553])
+        self.std_evt  = np.array([0.11685933,  328.8763, 35.128212,
+                                  0.26894414, 2837.279, 10.211621, 
+                                  0.5453464, 1.8222283, 5.755058,
+                                  2.3056376, 0.4584204, 94.97458, 0.051722374])
 
-        self.part_names = ['$\eta$', '$\phi$', 'log($1 + p_{Trel}$)',
+        self.part_names = ['$p_x$', '$p_y$', 'p_z$)',
                            'vx', 'vy', 'vz',
-                           'is electron','is muon', 'is photon',
-                           'is neutral hadron','is charged hadron']
+                           'charge','mass', 'PDG','time']
 
-        self.evt_names = ['$MET_x$ [GeV]','$MET_y$ [GeV]','HT [GeV]',
-                          'nelectron','nmuon','nphoton','nneutral','ncharged']
-
-        # self.evt_names = ['$x$', '$Q^2$ [GeV]$^2$','$W$', '$y$', '$\nu$']
+        self.evt_names = ['$x$', '$Q^2$ [GeV]$^2$','$W$', 
+                          '$y$', '$\nu$', 'multiplicity',
+                          'elec_','elec_','elec_',
+                          'elec_','elec_','elec_','elec_']
 
         
         if self.corrector:            
