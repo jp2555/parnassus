@@ -71,8 +71,8 @@ class DataLoader:
 
         self.evt_names = ['$x$', '$Q^2$ [GeV]$^2$','$W$', 
                           '$y$', '$\nu$', 'multiplicity',
-                          'elec_','elec_','elec_',
-                          'elec_','elec_','elec_','elec_']
+                          'elec_eta','elec_phi','elec_E',
+                          'elec_x','elec_y','elec_z','E_miss']  # eta, phi, E, xyz-vert, E_miss
 
         
         if self.corrector:            

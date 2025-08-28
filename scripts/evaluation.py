@@ -36,7 +36,8 @@ from jet_helper import Jet, get_cluster_sequence
 #     "pfcs": "PFCand_",
 # }
 
-varlist = ["pt", "eta", "phi", "vx", "vy", "vz", "class"]
+# varlist = ["pt", "eta", "phi", "vx", "vy", "vz", "class"]
+varlist = ['$x$', '$Q^2$ [GeV]$^2$','$W$', '$y$', '$\nu$', 'multiplicity']
 
 
 parser = argparse.ArgumentParser(description="Preprocess full event files")
