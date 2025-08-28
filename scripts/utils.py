@@ -111,12 +111,12 @@ class DataLoader:
         
         self.gen =  np.concatenate([h5.File(f, 'r')['gen_particles'][:] for f in self.files], axis=0)[:nevts]
         self.gen_evt = np.concatenate([h5.File(f, 'r')['gen_events'][:] for f in self.files], axis=0)[:nevts]
-        evtn = np.concatenate([h5.File(f, 'r')['eventNumber'][:] for f in self.files], axis=0)[:nevts]
+        # evtn = np.concatenate([h5.File(f, 'r')['eventNumber'][:] for f in self.files], axis=0)[:nevts]
         self.gen_mask = self.gen[:, :, 2] != 0  
             
         gen = self.preprocess(self.gen,self.gen_mask).astype(np.float32)
         gen_evt = self.preprocess_evt(self.gen_evt).astype(np.float32)
-        return gen, self.gen_mask.astype(np.float32), gen_evt, evtn.astype(np.int32)
+        return gen, self.gen_mask.astype(np.float32), gen_evt#, evtn.astype(np.int32)
 
         
     def data_from_file(self,files, nevts = None,preprocess=False):

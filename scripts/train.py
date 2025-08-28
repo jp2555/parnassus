@@ -86,11 +86,11 @@ def main():
 
     else:
         train_loader = utils.DataLoader(os.path.join(flags.folder,'h5'),
-                                        names = ['top','qcd_400','qcd_600'],
+                                        names = ['train_eic.h5'],
                                         batch_size = flags.batch,
                                         rank = hvd.rank(), size = hvd.size())
         val_loader = utils.DataLoader(os.path.join(flags.folder,'h5'),
-                                      names = ['ggF'],
+                                      names = ['val_eic.h5'],
                                       batch_size = flags.batch,
                                       rank = hvd.rank(), size = hvd.size())
 
