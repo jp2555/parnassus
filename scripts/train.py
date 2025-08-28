@@ -34,7 +34,7 @@ def get_model_name(flags):
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Train the PET model.")
     parser.add_argument("--dataset", type=str, default="parnassus", help="Dataset to use")
-    parser.add_argument("--folder", type=str, default="/mscratch/sd/v/vmikuni/parnassus/", help="Folder containing input files")
+    parser.add_argument("--folder", type=str, default="/global/cfs/cdirs/m3246/eic/NC_DIS_18x275/h5_files/minQ2=100/", help="Folder containing input files")
     parser.add_argument("--batch", type=int, default=64, help="Batch size")
     parser.add_argument("--epoch", type=int, default=300, help="Max epoch")
     parser.add_argument("--lr", type=float, default=3e-5, help="Learning rate")

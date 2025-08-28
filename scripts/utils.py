@@ -94,11 +94,11 @@ class DataLoader:
     def get_stats(self,file_list):
         self.nevts = 0
         for f in file_list:
-            self.nevts+= h5.File(f,'r')['reco_evt'].shape[0]
+            self.nevts+= h5.File(f,'r')['reco_events'].shape[0]
         #print(file_list)
-        self.num_part = h5.File(file_list[0],'r')['reco'].shape[1]
-        self.num_feat = h5.File(file_list[0],'r')['reco'].shape[2]
-        self.num_evt = h5.File(file_list[0],'r')['reco_evt'].shape[1]
+        self.num_part = h5.File(file_list[0],'r')['reco_particles'].shape[1]
+        self.num_feat = h5.File(file_list[0],'r')['reco_particles'].shape[2]
+        self.num_evt = h5.File(file_list[0],'r')['reco_events'].shape[1]
         self.steps_per_epoch = self.nevts//self.size//self.batch_size
 
         if self.rank ==0:
@@ -109,8 +109,8 @@ class DataLoader:
         if nevts<0:
             nevts = self.nevts
         
-        self.gen =  np.concatenate([h5.File(f, 'r')['gen'][:] for f in self.files], axis=0)[:nevts]
-        self.gen_evt = np.concatenate([h5.File(f, 'r')['gen_evt'][:] for f in self.files], axis=0)[:nevts]
+        self.gen =  np.concatenate([h5.File(f, 'r')['gen_particles'][:] for f in self.files], axis=0)[:nevts]
+        self.gen_evt = np.concatenate([h5.File(f, 'r')['gen_events'][:] for f in self.files], axis=0)[:nevts]
         evtn = np.concatenate([h5.File(f, 'r')['eventNumber'][:] for f in self.files], axis=0)[:nevts]
         self.gen_mask = self.gen[:, :, 2] != 0  
             
@@ -120,12 +120,12 @@ class DataLoader:
 
         
     def data_from_file(self,files, nevts = None,preprocess=False):
-        reco_data_chunk = np.concatenate([h5.File(f, 'r')['reco'][:] for f in files], axis=0)[:nevts]
+        reco_data_chunk = np.concatenate([h5.File(f, 'r')['reco_particles'][:] for f in files], axis=0)[:nevts]
         reco_mask_chunk = reco_data_chunk[:, :, 2] != 0
-        gen_data_chunk = np.concatenate([h5.File(f, 'r')['gen'][:] for f in files], axis=0)[:nevts]
+        gen_data_chunk = np.concatenate([h5.File(f, 'r')['gen_particles'][:] for f in files], axis=0)[:nevts]
         gen_mask_chunk = gen_data_chunk[:, :, 2] != 0
-        gen_evt_chunk = np.concatenate([h5.File(f, 'r')['gen_evt'][:] for f in files], axis=0)[:nevts]
-        reco_evt_chunk = np.concatenate([h5.File(f, 'r')['reco_evt'][:] for f in files], axis=0)[:nevts]
+        gen_evt_chunk = np.concatenate([h5.File(f, 'r')['gen_events'][:] for f in files], axis=0)[:nevts]
+        reco_evt_chunk = np.concatenate([h5.File(f, 'r')['reco_events'][:] for f in files], axis=0)[:nevts]
 
         if preprocess:
             reco_data_chunk = self.preprocess(reco_data_chunk, reco_mask_chunk)
@@ -180,14 +180,14 @@ class DataLoader:
 
     def single_file_generator(self, file_path):
         with h5.File(file_path, 'r') as file:
-            data_size = file['reco_evt'].shape[0]
+            data_size = file['reco_events'].shape[0]
             for start in range(0, data_size, self.chunk_size):
                 end = min(start + self.chunk_size, data_size)
                 
-                reco_chunk = file['reco'][start:end].astype(np.float32)
-                gen_chunk = file['gen'][start:end].astype(np.float32)
-                reco_evt_chunk = file['reco_evt'][start:end]
-                gen_evt_chunk = file['gen_evt'][start:end]
+                reco_chunk = file['reco_particles'][start:end].astype(np.float32)
+                gen_chunk = file['gen_particles'][start:end].astype(np.float32)
+                reco_evt_chunk = file['reco_events'][start:end]
+                gen_evt_chunk = file['gen_events'][start:end]
                 reco_mask_chunk = reco_chunk[:, :, 2] != 0
                 gen_mask_chunk = gen_chunk[:, :, 2] != 0  
                 
